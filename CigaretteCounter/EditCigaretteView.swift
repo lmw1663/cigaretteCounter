@@ -240,18 +240,7 @@ struct EditCigaretteView: View {
     }
     
     private var barcodeFormat: String {
-        if barcodeNumber.allSatisfy({ $0.isNumber }) {
-            switch barcodeNumber.count {
-            case 8:
-                return "EAN-8"
-            case 13:
-                return "EAN-13"
-            default:
-                return "Code128"
-            }
-        } else {
-            return "Code128"
-        }
+        return BarcodeGenerator.getActualBarcodeFormat(from: barcodeNumber)
     }
     
     private func generateBarcodeWithDelay() {
