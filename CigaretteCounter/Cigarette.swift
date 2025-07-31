@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Cigarette: Identifiable, Hashable {
+struct Cigarette: Identifiable, Hashable, Codable {
     let id = UUID()
     var name: String
     var barcodeImageName: String
@@ -26,5 +26,10 @@ struct Cigarette: Identifiable, Hashable {
     // 계산 프로퍼티: 전산 재고 - (창고 재고 + 매대 재고)
     var difference: Int {
         return registeredStock - (warehouseStock + storefrontStock)
+    }
+    
+    // Codable을 위한 커스텀 키
+    private enum CodingKeys: String, CodingKey {
+        case id, name, barcodeImageName, storefrontStock, warehouseStock, registeredStock, order, barcodeNumber
     }
 } 

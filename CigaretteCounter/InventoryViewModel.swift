@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 class InventoryViewModel: ObservableObject {
     @Published var cigarettes: [Cigarette] = []
@@ -15,19 +16,52 @@ class InventoryViewModel: ObservableObject {
     @Published var showingEditCigaretteSheet = false
     @Published var editingCigarette: Cigarette?
     
-    // 검색 결과 필터링
+    private var cancellables = Set<AnyCancellable>()
+    
     var filteredCigarettes: [Cigarette] {
-        if searchText.isEmpty {
-            return cigarettes.sorted { $0.order < $1.order }
-        } else {
-            return cigarettes
-                .filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-                .sorted { $0.order < $1.order }
+        let filtered = searchText.isEmpty ? cigarettes : cigarettes.filter { cigarette in
+            cigarette.name.localizedCaseInsensitiveContains(searchText)
         }
+        return filtered.sorted { $0.order < $1.order }
+    }
+    
+    var sortedCigarettes: [Cigarette] {
+        return cigarettes.sorted { $0.order < $1.order }
     }
     
     init() {
-        initializeCigarettes()
+        loadCigarettesData()
+        setupAutoSave()
+        
+        // DataManager 정보 출력 (디버깅용)
+        DataManager.shared.printStorageInfo()
+    }
+    
+    // MARK: - 데이터 로드/저장
+    
+    private func loadCigarettesData() {
+        // 저장된 데이터가 있으면 로드, 없으면 기본 데이터 사용
+        if let savedCigarettes = DataManager.shared.loadCigarettes() {
+            cigarettes = savedCigarettes
+        } else {
+            initializeCigarettes()
+            // 처음 실행이므로 기본 데이터 저장
+            saveCigarettesData()
+        }
+    }
+    
+    private func saveCigarettesData() {
+        DataManager.shared.saveCigarettes(cigarettes)
+    }
+    
+    private func setupAutoSave() {
+        // cigarettes 배열이 변경될 때마다 자동 저장
+        $cigarettes
+            .debounce(for: .milliseconds(500), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.saveCigarettesData()
+            }
+            .store(in: &cancellables)
     }
     
     private func initializeCigarettes() {
@@ -260,7 +294,7 @@ class InventoryViewModel: ObservableObject {
         
         cigarettes.append(newCigarette)
         
-        // TODO: 생성된 바코드 이미지를 Assets에 저장하는 로직 추가
+        // 생성된 바코드 이미지를 Documents 디렉토리에 저장
         if let imageData = generatedImage {
             saveBarcodeImage(imageData: imageData, imageName: imageName)
         }
@@ -273,16 +307,22 @@ class InventoryViewModel: ObservableObject {
     
     func updateCigarette(id: UUID, name: String, barcodeNumber: String, generatedImage: Data?) {
         if let index = cigarettes.firstIndex(where: { $0.id == id }) {
-            var updatedCigarette = cigarettes[index]
+            let oldCigarette = cigarettes[index]
+            var updatedCigarette = oldCigarette
             updatedCigarette.name = name
             updatedCigarette.barcodeNumber = barcodeNumber
             
             // 바코드가 변경된 경우 새 이미지명 생성
-            if cigarettes[index].barcodeNumber != barcodeNumber {
+            if oldCigarette.barcodeNumber != barcodeNumber {
+                // 기존 바코드 이미지 삭제 (custom_ 접두사가 있는 경우만)
+                if oldCigarette.barcodeImageName.hasPrefix("custom_") {
+                    _ = DataManager.shared.deleteBarcodeImage(imageName: oldCigarette.barcodeImageName)
+                }
+                
                 let newImageName = "custom_\(UUID().uuidString)"
                 updatedCigarette.barcodeImageName = newImageName
                 
-                // TODO: 새로운 바코드 이미지를 Assets에 저장
+                // 새로운 바코드 이미지를 Documents 디렉토리에 저장
                 if let imageData = generatedImage {
                     saveBarcodeImage(imageData: imageData, imageName: newImageName)
                 }
@@ -293,9 +333,15 @@ class InventoryViewModel: ObservableObject {
     }
     
     func deleteCigarette(at offsets: IndexSet) {
-        let sortedCigarettes = filteredCigarettes
         for index in offsets {
             if let cigaretteIndex = cigarettes.firstIndex(where: { $0.id == sortedCigarettes[index].id }) {
+                let cigarette = cigarettes[cigaretteIndex]
+                
+                // 커스텀 바코드 이미지 삭제 (custom_ 접두사가 있는 경우만)
+                if cigarette.barcodeImageName.hasPrefix("custom_") {
+                    _ = DataManager.shared.deleteBarcodeImage(imageName: cigarette.barcodeImageName)
+                }
+                
                 cigarettes.remove(at: cigaretteIndex)
             }
         }
@@ -314,8 +360,12 @@ class InventoryViewModel: ObservableObject {
     }
     
     private func saveBarcodeImage(imageData: Data, imageName: String) {
-        // TODO: 실제 앱에서는 Documents 디렉토리나 다른 적절한 위치에 이미지 저장
-        print("바코드 이미지 저장: \(imageName)")
+        let success = DataManager.shared.saveBarcodeImage(imageData, imageName: imageName)
+        if success {
+            print("✅ 바코드 이미지 저장 성공: \(imageName)")
+        } else {
+            print("❌ 바코드 이미지 저장 실패: \(imageName)")
+        }
     }
     
     func resetAllStocks() {
@@ -342,5 +392,18 @@ class InventoryViewModel: ObservableObject {
             }
             return cigarette.barcodeNumber == barcodeNumber
         }
+    }
+    
+    // MARK: - 디버깅 및 관리 함수
+    
+    /// 모든 저장된 데이터 삭제 (디버깅용)
+    func clearAllSavedData() {
+        DataManager.shared.clearAllData()
+        initializeCigarettes() // 기본 데이터로 초기화
+    }
+    
+    /// 저장된 데이터 정보 출력
+    func printStorageInfo() {
+        DataManager.shared.printStorageInfo()
     }
 } 
