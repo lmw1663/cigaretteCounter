@@ -56,17 +56,32 @@ struct CigaretteRowView: View {
     }
     
     private func updateTextFields() {
+        // 매대 재고는 개비 단위로 표시 (0인 경우 빈 문자열)
         storefrontText = cigarette.storefrontStock == 0 ? "" : "\(cigarette.storefrontStock)"
-        warehouseText = cigarette.warehouseStock == 0 ? "" : "\(cigarette.warehouseStock)"
+        
+        // 창고 재고는 보루 단위로 표시 (0인 경우 빈 문자열)
+        warehouseText = cigarette.warehouseStockInBoru == 0 ? "" : "\(cigarette.warehouseStockInBoru)"
+        
+        // 전산 재고는 개비 단위로 표시
         registeredText = cigarette.registeredStock == 0 ? "" : "\(cigarette.registeredStock)"
     }
     
     private var storefrontSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("매대")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            TextField("매대 수량", text: $storefrontText)
+            HStack {
+                Text("매대")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("(개비)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 4)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            
+            TextField("매대 수량 (개비)", text: $storefrontText)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .storefront(id: cigarette.id))
@@ -96,32 +111,42 @@ struct CigaretteRowView: View {
     
     private var warehouseSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("창고")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            TextField("창고 수량", text: $warehouseText)
+            HStack {
+                Text("창고")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("(보루)")
+                    .font(.caption2)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 4)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            
+            TextField("창고 수량 (보루)", text: $warehouseText)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .warehouse(id: cigarette.id))
                 .onTapGesture {
-                    if cigarette.warehouseStock == 0 {
+                    if cigarette.warehouseStockInBoru == 0 {
                         warehouseText = ""
                     }
                 }
                 .onChange(of: warehouseText) { _, newValue in
                     if let value = Int(newValue) {
-                        cigarette.warehouseStock = value
+                        cigarette.warehouseStockInBoru = value
                     } else if newValue.isEmpty {
-                        cigarette.warehouseStock = 0
+                        cigarette.warehouseStockInBoru = 0
                     }
                 }
                 .onChange(of: focusedField) { _, newFocus in
                     if case .warehouse(let id) = newFocus, id == cigarette.id {
-                        if cigarette.warehouseStock == 0 {
+                        if cigarette.warehouseStockInBoru == 0 {
                             warehouseText = ""
                         }
                     } else if warehouseText.isEmpty {
-                        cigarette.warehouseStock = 0
+                        cigarette.warehouseStockInBoru = 0
                     }
                 }
         }
@@ -129,11 +154,21 @@ struct CigaretteRowView: View {
     
     private var registeredSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("전산 재고")
-                .font(.caption)
-                .foregroundColor(.secondary)
             HStack {
-                TextField("전산 재고", text: $registeredText)
+                Text("전산 재고")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("(개비)")
+                    .font(.caption2)
+                    .foregroundColor(.purple)
+                    .padding(.horizontal, 4)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(4)
+            }
+            
+            HStack {
+                TextField("전산 재고 (개비)", text: $registeredText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .keyboardType(.numberPad)
                     .focused($focusedField, equals: .registered(id: cigarette.id))
@@ -159,10 +194,18 @@ struct CigaretteRowView: View {
                         }
                     }
                 
-                Text("차이: \(cigarette.difference)")
-                    .font(.caption)
-                    .foregroundColor(differenceColor)
-                    .padding(.horizontal, 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("차이: \(cigarette.difference)")
+                        .font(.caption)
+                        .foregroundColor(differenceColor)
+                        .fontWeight(.medium)
+                    
+                    // 차이 설명
+                    Text("창고+매대-전산")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 8)
             }
         }
     }
